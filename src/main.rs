@@ -1,6 +1,12 @@
-use axum::{routing::get, Json, Router};
+use anyhow::{Error, Result};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::get,
+    Json, Router,
+};
 use dotenv::dotenv;
-use gcp_bigquery_client::{error::BQError, model::query_request::QueryRequest};
+use gcp_bigquery_client::model::query_request::QueryRequest;
 use serde::Serialize;
 use serde_json::Value;
 use std::net::SocketAddr;
@@ -32,15 +38,19 @@ async fn main() {
 
 // basic handler that responds with a static string
 async fn root() -> &'static str {
-    "Hello, Wores!"
+    "Hello, World!"
 }
 
-// #[tokio::main]
-// async fn main() {
-//     dotenv().ok();
-//     let res = get_customers().await;
-//     println!("{:?}", res);
-// }
+#[derive(Debug)]
+struct AppError(Error);
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        tracing::error!("Application error: {:#}", self.0);
+
+        (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong").into_response()
+    }
+}
 
 #[derive(Debug, Serialize)]
 pub struct Customer {
@@ -51,11 +61,23 @@ pub struct Customer {
     created_at: String,
 }
 
-async fn get_customers() -> Result<Json<Vec<Customer>>, BQError> {
+async fn get_customers() -> Result<Json<Vec<Customer>>, AppError> {
     let file_path = dotenv!("GCP_SERVICE_ACCOUNT_FILE_PATH");
     let gcp_project_id = dotenv!("GCP_PROJECT_ID");
-    let sa_key = yup_oauth2::read_service_account_key(file_path).await?;
-    let client = gcp_bigquery_client::Client::from_service_account_key(sa_key, true).await?;
+    let sa_key = yup_oauth2::read_service_account_key(file_path)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to read service account key: {:?}", e);
+            // ここで適切なデフォルトのレスポンスを返すか、Infallibleのエラーを返す
+        })
+        .unwrap();
+    let client = gcp_bigquery_client::Client::from_service_account_key(sa_key, true)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to init gcp_bigquery_client: {:?}", e);
+            // ここで適切なデフォルトのレスポンスを返すか、Infallibleのエラーを返す
+        })
+        .unwrap();
 
     let query = format!(
         "SELECT *  FROM `{}.{}.{}` ORDER BY customer_id ASC LIMIT 1000",
@@ -63,8 +85,13 @@ async fn get_customers() -> Result<Json<Vec<Customer>>, BQError> {
     );
     let rs = client
         .job()
-        .query(gcp_project_id, QueryRequest::new(query))
-        .await?;
+        .query(gcp_project_id, QueryRequest::new(&query))
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to bq query {}: {:?}", &query, e);
+            // ここで適切なデフォルトのレスポンスを返すか、Infallibleのエラーを返す
+        })
+        .unwrap();
 
     let mut customers: Vec<Customer> = vec![];
     if let Some(rows) = &rs.query_response().rows {

@@ -204,6 +204,7 @@ dependencies = [
 name = "cloud-run-rust-test"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "chrono",
  "dotenv",
