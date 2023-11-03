@@ -6,13 +6,43 @@ use axum::{
     Json, Router,
 };
 use dotenv::dotenv;
-use gcp_bigquery_client::model::query_request::QueryRequest;
+use gcp_bigquery_client::{model::query_request::QueryRequest, Client};
+use once_cell::sync::Lazy;
 use serde::Serialize;
 use serde_json::Value;
 use std::net::SocketAddr;
+use tokio::runtime;
 
 #[macro_use]
 extern crate dotenv_codegen;
+
+static BQ_CLIENT: Lazy<Result<Client, String>> = Lazy::new(|| {
+    // 新しいRuntimeを作成し、非同期コードを同期的に実行
+    let runtime = runtime::Runtime::new().expect("Failed to create a runtime");
+    runtime.block_on(init_bq_client())
+});
+
+async fn init_bq_client() -> Result<Client, String> {
+    dotenv().ok();
+
+    let file_path = dotenv!("GCP_SERVICE_ACCOUNT_FILE_PATH");
+    let sa_key = yup_oauth2::read_service_account_key(file_path)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to read service account key: {:?}", e);
+            "Failed to read service account key".to_string()
+        })
+        .unwrap();
+
+    let client = Client::from_service_account_key(sa_key, true)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to init gcp_bigquery_client: {:?}", e);
+            "Failed to init gcp_bigquery_client".to_string()
+        })?;
+
+    Ok(client)
+}
 
 #[tokio::main]
 async fn main() {
@@ -62,22 +92,16 @@ pub struct Customer {
 }
 
 async fn get_customers() -> Result<Json<Vec<Customer>>, AppError> {
-    let file_path = dotenv!("GCP_SERVICE_ACCOUNT_FILE_PATH");
     let gcp_project_id = dotenv!("GCP_PROJECT_ID");
-    let sa_key = yup_oauth2::read_service_account_key(file_path)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to read service account key: {:?}", e);
-            // ここで適切なデフォルトのレスポンスを返すか、Infallibleのエラーを返す
-        })
-        .unwrap();
-    let client = gcp_bigquery_client::Client::from_service_account_key(sa_key, true)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to init gcp_bigquery_client: {:?}", e);
-            // ここで適切なデフォルトのレスポンスを返すか、Infallibleのエラーを返す
-        })
-        .unwrap();
+
+    let client_result = &*BQ_CLIENT;
+    let client = match client_result {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("Failed to init bq client: {:?}", e);
+            return Err(AppError(anyhow::anyhow!(e)));
+        }
+    };
 
     let query = format!(
         "SELECT *  FROM `{}.{}.{}` ORDER BY customer_id ASC LIMIT 1000",
