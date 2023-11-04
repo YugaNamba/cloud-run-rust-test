@@ -33,35 +33,36 @@ pub async fn list() -> Result<Json<Vec<Customer>>, AppError> {
             AppError(anyhow::anyhow!(e))
         })?;
 
-    let mut customers: Vec<Customer> = vec![];
-    if let Some(rows) = &rs.query_response().rows {
-        for row in rows {
-            if let Some(columns) = &row.columns {
-                let id = get_cleaned_value(&columns[0].value);
-                let first_name = get_cleaned_value(&columns[1].value);
-                let last_name = get_cleaned_value(&columns[2].value);
-                let email = get_cleaned_value(&columns[3].value);
-                let created_at = get_cleaned_value(&columns[4].value);
+    let customers = parse_customers(rs.query_response().rows.as_ref());
 
-                let customer = Customer {
-                    id,
-                    first_name,
-                    last_name,
-                    email,
-                    created_at,
-                };
-
-                customers.push(customer);
-            }
-        }
-    }
     Ok(Json(customers))
 }
 
+fn parse_customers(
+    rows: Option<&Vec<gcp_bigquery_client::model::table_row::TableRow>>,
+) -> Vec<Customer> {
+    rows.unwrap_or(&Vec::new())
+        .iter()
+        .filter_map(|row| row.columns.as_ref())
+        .map(|columns| {
+            let id = get_cleaned_value(&columns[0].value);
+            let first_name = get_cleaned_value(&columns[1].value);
+            let last_name = get_cleaned_value(&columns[2].value);
+            let email = get_cleaned_value(&columns[3].value);
+            let created_at = get_cleaned_value(&columns[4].value);
+
+            Customer {
+                id,
+                first_name,
+                last_name,
+                email,
+                created_at,
+            }
+        })
+        .collect()
+}
+
 fn get_cleaned_value(opt: &Option<Value>) -> String {
-    opt.clone()
-        .unwrap_or_default()
-        .to_string()
-        .trim_matches('\"')
-        .to_string()
+    opt.as_ref()
+        .map_or_else(String::new, |v| v.to_string().trim_matches('"').to_string())
 }
