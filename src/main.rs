@@ -13,6 +13,8 @@ use serde_json::Value;
 use std::net::SocketAddr;
 use tokio::sync::Mutex;
 
+mod root;
+
 #[macro_use]
 extern crate dotenv_codegen;
 
@@ -33,7 +35,7 @@ async fn main() {
 
     // build our application with a route
     let app = Router::new()
-        .route("/", get(root))
+        .route("/", get(root::root))
         .route("/get_customers", get(get_customers));
 
     // run our app with hyper
@@ -62,10 +64,6 @@ async fn init_bq_client() -> Result<Client, String> {
         })?;
 
     Ok(client)
-}
-
-async fn root() -> &'static str {
-    "Hello, World!"
 }
 
 #[derive(Debug)]
