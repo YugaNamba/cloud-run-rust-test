@@ -1,10 +1,10 @@
 use crate::{AppError, BQ_CLIENT};
-use axum::Json;
+use axum::{extract::Path, Json};
 use gcp_bigquery_client::model::query_request::QueryRequest;
 use serde::Serialize;
 use serde_json::Value;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct Customer {
     id: String,
     first_name: String,
@@ -36,6 +36,32 @@ pub async fn list() -> Result<Json<Vec<Customer>>, AppError> {
     let customers = parse_customers(rs.query_response().rows.as_ref());
 
     Ok(Json(customers))
+}
+
+pub async fn get(Path(id): Path<String>) -> Result<Json<Customer>, AppError> {
+    println!("id: {}", id);
+    let gcp_project_id = dotenv!("GCP_PROJECT_ID");
+
+    // BQ_CLIENTのMutexをロックして中のClientを取得
+    let client = BQ_CLIENT.lock().await;
+    let client = client.as_ref().expect("BQ client not initialized");
+
+    let query = format!(
+        "SELECT *  FROM `{}.{}.{}` WHERE customer_id = {} LIMIT 1",
+        gcp_project_id, "test_tokyo", "customers", id
+    );
+    let rs = client
+        .job()
+        .query(gcp_project_id, QueryRequest::new(&query))
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to bq query {}: {:?}", &query, e);
+            AppError(anyhow::anyhow!(e))
+        })?;
+
+    let customers = parse_customers(rs.query_response().rows.as_ref());
+
+    Ok(Json(customers[0].clone()))
 }
 
 fn parse_customers(

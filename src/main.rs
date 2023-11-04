@@ -35,7 +35,8 @@ async fn main() {
     // build our application with a route
     let app = Router::new()
         .route("/", get(root::root))
-        .route("/get_customers", get(customers::list));
+        .route("/customers", get(customers::list))
+        .route("/customers/:id", get(customers::get));
 
     // run our app with hyper
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
