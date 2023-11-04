@@ -11,28 +11,48 @@ use once_cell::sync::Lazy;
 use serde::Serialize;
 use serde_json::Value;
 use std::net::SocketAddr;
-use tokio::runtime;
+use tokio::sync::Mutex;
 
 #[macro_use]
 extern crate dotenv_codegen;
 
-static BQ_CLIENT: Lazy<Result<Client, String>> = Lazy::new(|| {
-    // 新しいRuntimeを作成し、非同期コードを同期的に実行
-    let runtime = runtime::Runtime::new().expect("Failed to create a runtime");
-    runtime.block_on(init_bq_client())
-});
+// BQ_CLIENTはオプションのMutexでラップされます。
+static BQ_CLIENT: Lazy<Mutex<Option<Client>>> = Lazy::new(|| Mutex::new(None));
+
+#[tokio::main]
+async fn main() {
+    dotenv().ok();
+    // initialize tracing
+    tracing_subscriber::fmt::init();
+
+    // BQ_CLIENTの初期化
+    {
+        let mut bq_client = BQ_CLIENT.lock().await;
+        *bq_client = Some(init_bq_client().await.expect("Failed to init BQ client"));
+    }
+
+    // build our application with a route
+    let app = Router::new()
+        .route("/", get(root))
+        .route("/get_customers", get(get_customers));
+
+    // run our app with hyper
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    tracing::debug!("listening on {}", addr);
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
+}
 
 async fn init_bq_client() -> Result<Client, String> {
-    dotenv().ok();
-
     let file_path = dotenv!("GCP_SERVICE_ACCOUNT_FILE_PATH");
     let sa_key = yup_oauth2::read_service_account_key(file_path)
         .await
         .map_err(|e| {
             tracing::error!("Failed to read service account key: {:?}", e);
             "Failed to read service account key".to_string()
-        })
-        .unwrap();
+        })?;
 
     let client = Client::from_service_account_key(sa_key, true)
         .await
@@ -44,29 +64,6 @@ async fn init_bq_client() -> Result<Client, String> {
     Ok(client)
 }
 
-#[tokio::main]
-async fn main() {
-    dotenv().ok();
-    // initialize tracing
-    tracing_subscriber::fmt::init();
-
-    // build our application with a route
-    let app = Router::new()
-        // `GET /` goes to `root`
-        .route("/", get(root))
-        .route("/get_customers", get(get_customers));
-
-    // run our app with hyper
-    // `axum::Server` is a re-export of `hyper::Server`
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    tracing::debug!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
-}
-
-// basic handler that responds with a static string
 async fn root() -> &'static str {
     "Hello, World!"
 }
@@ -77,7 +74,6 @@ struct AppError(Error);
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         tracing::error!("Application error: {:#}", self.0);
-
         (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong").into_response()
     }
 }
@@ -94,14 +90,9 @@ pub struct Customer {
 async fn get_customers() -> Result<Json<Vec<Customer>>, AppError> {
     let gcp_project_id = dotenv!("GCP_PROJECT_ID");
 
-    let client_result = &*BQ_CLIENT;
-    let client = match client_result {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!("Failed to init bq client: {:?}", e);
-            return Err(AppError(anyhow::anyhow!(e)));
-        }
-    };
+    // BQ_CLIENTのMutexをロックして中のClientを取得
+    let client = BQ_CLIENT.lock().await;
+    let client = client.as_ref().expect("BQ client not initialized");
 
     let query = format!(
         "SELECT *  FROM `{}.{}.{}` ORDER BY customer_id ASC LIMIT 1000",
@@ -113,9 +104,8 @@ async fn get_customers() -> Result<Json<Vec<Customer>>, AppError> {
         .await
         .map_err(|e| {
             tracing::error!("Failed to bq query {}: {:?}", &query, e);
-            // ここで適切なデフォルトのレスポンスを返すか、Infallibleのエラーを返す
-        })
-        .unwrap();
+            AppError(anyhow::anyhow!(e))
+        })?;
 
     let mut customers: Vec<Customer> = vec![];
     if let Some(rows) = &rs.query_response().rows {
