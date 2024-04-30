@@ -5,7 +5,7 @@ Rust と BigQuery を使った API を Cloud Run 上で実行するアプリケ�
 ## local から接続
 
 ```sh
-gcloud run services proxy cloud-run-rust-test --project cloud-run-rust-test
+gcloud run services proxy api --project cloud-run-rust-test
 ```
 
 ## deploy
