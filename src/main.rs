@@ -25,13 +25,6 @@ async fn main() {
     dotenv().ok();
     // initialize tracing
     tracing_subscriber::fmt::init();
-
-    // BQ_CLIENTの初期化
-    {
-        let mut bq_client = BQ_CLIENT.lock().await;
-        *bq_client = Some(init_bq_client().await.expect("Failed to init BQ client"));
-    }
-
     // build our application with a route
     let app = Router::new()
         .route("/", get(root::root))
@@ -47,7 +40,7 @@ async fn main() {
         .unwrap();
 }
 
-async fn init_bq_client() -> Result<Client, String> {
+pub async fn init_bq_client() -> Result<Client, String> {
     let file_path = dotenv!("GCP_SERVICE_ACCOUNT_FILE_PATH");
     let sa_key = yup_oauth2::read_service_account_key(file_path)
         .await

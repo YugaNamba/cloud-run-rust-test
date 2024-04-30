@@ -11,11 +11,11 @@ axum = "0.6.20"
 chrono = "0.4.31"
 dotenv = "0.15.0"
 dotenv_codegen = "0.15.0"
-gcp-bigquery-client = "0.17.1"
+gcp-bigquery-client = "0.20.0"
 once_cell = "1.18.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.33.0", features = ["full"] }
 tracing = "0.1.39"
 tracing-subscriber = "0.3.17"
-yup-oauth2 = "8.3.0"
+yup-oauth2 = "9.0.0"

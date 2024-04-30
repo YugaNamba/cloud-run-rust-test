@@ -1,9 +1,9 @@
-use crate::{AppError, BQ_CLIENT};
+use crate::AppError;
 use axum::{extract::Path, Json};
 use gcp_bigquery_client::model::query_request::QueryRequest;
 use serde::Serialize;
 use serde_json::Value;
-
+use crate::init_bq_client;
 #[derive(Debug, Serialize, Clone)]
 pub struct Customer {
     id: String,
@@ -17,8 +17,7 @@ pub async fn list() -> Result<Json<Vec<Customer>>, AppError> {
     let gcp_project_id = dotenv!("GCP_PROJECT_ID");
 
     // BQ_CLIENTのMutexをロックして中のClientを取得
-    let client = BQ_CLIENT.lock().await;
-    let client = client.as_ref().expect("BQ client not initialized");
+    let client = init_bq_client().await.expect("Failed to init BQ client");
 
     let query = format!(
         "SELECT *  FROM `{}.{}.{}` ORDER BY customer_id ASC LIMIT 1000",
@@ -43,8 +42,7 @@ pub async fn get(Path(id): Path<String>) -> Result<Json<Customer>, AppError> {
     let gcp_project_id = dotenv!("GCP_PROJECT_ID");
 
     // BQ_CLIENTのMutexをロックして中のClientを取得
-    let client = BQ_CLIENT.lock().await;
-    let client = client.as_ref().expect("BQ client not initialized");
+    let client = init_bq_client().await.expect("Failed to init BQ client");
 
     let query = format!(
         "SELECT *  FROM `{}.{}.{}` WHERE customer_id = {} LIMIT 1",
