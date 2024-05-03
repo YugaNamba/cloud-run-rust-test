@@ -15,14 +15,10 @@ pub struct Customer {
     created_at: String,
 }
 
-#[utoipa::path(
-    get,
-    path = "/customers",
-    tag = "Customer")]
+#[utoipa::path(get, path = "/customers", tag = "Customer")]
 pub async fn list() -> Result<Json<Vec<Customer>>, AppError> {
     let gcp_project_id = dotenv!("GCP_PROJECT_ID");
 
-    // BQ_CLIENTのMutexをロックして中のClientを取得
     let client = init_bq_client().await.expect("Failed to init BQ client");
 
     let query = format!(
@@ -43,14 +39,10 @@ pub async fn list() -> Result<Json<Vec<Customer>>, AppError> {
     Ok(Json(customers))
 }
 
-#[utoipa::path(
-    get,
-    path = "/customers/{id}",
-    tag = "Customer")]
+#[utoipa::path(get, path = "/customers/{id}", tag = "Customer")]
 pub async fn get(Path(id): Path<String>) -> Result<Json<Customer>, AppError> {
     let gcp_project_id = dotenv!("GCP_PROJECT_ID");
 
-    // BQ_CLIENTのMutexをロックして中のClientを取得
     let client = init_bq_client().await.expect("Failed to init BQ client");
 
     let query = format!(

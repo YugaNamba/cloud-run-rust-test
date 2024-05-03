@@ -18,9 +18,6 @@ mod root;
 #[macro_use]
 extern crate dotenv_codegen;
 
-// BQ_CLIENTはオプションのMutexでラップされます。
-pub static BQ_CLIENT: Lazy<Mutex<Option<Client>>> = Lazy::new(|| Mutex::new(None));
-
 #[tokio::main]
 async fn main() {
     dotenv().ok();
