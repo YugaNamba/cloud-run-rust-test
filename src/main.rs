@@ -9,6 +9,8 @@ use dotenv::dotenv;
 use gcp_bigquery_client::Client;
 use once_cell::sync::Lazy;
 use tokio::{net::TcpListener, sync::Mutex};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 mod customers;
 mod root;
@@ -26,6 +28,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
     // build our application with a route
     let app = Router::new()
+        .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .route("/", get(root::root))
         .route("/customers", get(customers::list))
         .route("/customers/:id", get(customers::get));
@@ -65,3 +68,17 @@ impl IntoResponse for AppError {
         (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong").into_response()
     }
 }
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        root::root,
+        customers::list,
+        customers::get
+    ),
+    components(schemas(
+        customers::Customer
+    )),
+    tags((name = "Customer"))
+)]
+struct ApiDoc;
