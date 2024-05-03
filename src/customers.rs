@@ -3,8 +3,10 @@ use axum::{extract::Path, Json};
 use gcp_bigquery_client::model::query_request::QueryRequest;
 use serde::Serialize;
 use serde_json::Value;
+use utoipa::ToSchema;
+
 use crate::init_bq_client;
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct Customer {
     id: String,
     first_name: String,
@@ -13,6 +15,10 @@ pub struct Customer {
     created_at: String,
 }
 
+#[utoipa::path(
+    get,
+    path = "/customers",
+    tag = "Customer")]
 pub async fn list() -> Result<Json<Vec<Customer>>, AppError> {
     let gcp_project_id = dotenv!("GCP_PROJECT_ID");
 
@@ -37,8 +43,11 @@ pub async fn list() -> Result<Json<Vec<Customer>>, AppError> {
     Ok(Json(customers))
 }
 
+#[utoipa::path(
+    get,
+    path = "/customers/{id}",
+    tag = "Customer")]
 pub async fn get(Path(id): Path<String>) -> Result<Json<Customer>, AppError> {
-    println!("id: {}", id);
     let gcp_project_id = dotenv!("GCP_PROJECT_ID");
 
     // BQ_CLIENTのMutexをロックして中のClientを取得
