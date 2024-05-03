@@ -8,8 +8,7 @@ use axum::{
 use dotenv::dotenv;
 use gcp_bigquery_client::Client;
 use once_cell::sync::Lazy;
-use std::net::SocketAddr;
-use tokio::sync::Mutex;
+use tokio::{net::TcpListener, sync::Mutex};
 
 mod customers;
 mod root;
@@ -32,10 +31,8 @@ async fn main() {
         .route("/customers/:id", get(customers::get));
 
     // run our app with hyper
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    tracing::debug!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    println!("listening on http://localhost:8080");
+    axum::serve(TcpListener::bind("0.0.0.0:8080").await.unwrap(), app)
         .await
         .unwrap();
 }

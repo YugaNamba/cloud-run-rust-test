@@ -1,5 +1,5 @@
 [package]
-name = "cloud-run-rust-test"
+name = "api"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.75"
-axum = "0.6.20"
+axum = "0.7.5"
 chrono = "0.4.31"
 dotenv = "0.15.0"
 dotenv_codegen = "0.15.0"
@@ -19,3 +19,6 @@ tokio = { version = "1.33.0", features = ["full"] }
 tracing = "0.1.39"
 tracing-subscriber = "0.3.17"
 yup-oauth2 = "9.0.0"
+
+[profile.release]
+strip = true
