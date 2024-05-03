@@ -7,8 +7,7 @@ use axum::{
 };
 use dotenv::dotenv;
 use gcp_bigquery_client::Client;
-use once_cell::sync::Lazy;
-use tokio::{net::TcpListener, sync::Mutex};
+use tokio::net::TcpListener;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
