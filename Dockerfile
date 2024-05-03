@@ -1,17 +1,14 @@
-# Use the official Rust image.
-# https://hub.docker.com/_/rust
-FROM rust
+FROM rust:latest as builder
 
-# Copy local code to the container image.
-WORKDIR /usr/src/app
+WORKDIR /work
 COPY . .
-
-# Install production dependencies and build a release artifact.
 RUN cargo build --release
+RUN strip /work/target/release/api -o /api
 
-# Service must listen to $PORT environment variable.
-# This default value facilitates local development.
-ENV PORT 8080
+FROM gcr.io/distroless/cc
 
-# Run the web service on container startup.
-ENTRYPOINT ["target/release/cloud-run-rust-test"]
+COPY --from=builder /api /
+COPY /.env /
+COPY /service_account.json /
+
+ENTRYPOINT ["/api"]
